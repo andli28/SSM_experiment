@@ -1,6 +1,7 @@
 ### Resources
 - https://longbench2.github.io/
 - https://pypi.org/project/mamba-ssm/
+- https://www.ai21.com/blog/introducing-jamba-reasoning-3b/
 
 ### Installation (in a virtual environment)
 ```bash
@@ -46,18 +47,27 @@ Modify these variables to point to your local vLLM server. vLLM uses the `v1/cha
 
 ```Python
 # Change it to this:
-api_url = "http://localhost:8000/v1/chat/completions"
+api_url = "http://localhost:8000/v1"
 api_key = "not-needed" # Pass a dummy string
 ```
 
-You will also need to set the model name inside the script to match what vLLM is serving. In pred.py, find the function that builds the request payload (likely get_answer or similar) and ensure the "model" field matches your model ID.
-
-```Python
-# Inside the request payload/json
-payload = {
-    "model": "ai21labs/AI21-Jamba-Reasoning-3B", # Make sure this matches!
-    "messages": ...,
+Inside LongBench/config, you'll need to update `model2path.json` to be
+```json
+{
+    "GLM-4-9B-Chat": "THUDM/glm-4-9b-chat",
     ...
+    "glm-4-plus": "THUDM/glm-4-9b-chat",
+    "Jamba-Reasoning-3B": "ai21labs/AI21-Jamba-Reasoning-3B"
+}
+```
+
+and `model2maxlen.json` to be
+```json
+{
+    "GLM-4-9B-Chat": 120000,
+    ...
+    "claude-3.5-sonnet-20241022": 200000,
+    "Jamba-Reasoning-3B": 262144
 }
 ```
 
@@ -66,7 +76,7 @@ Once pred.py is configured, you can run the inference. The --model argument here
 
 ```Bash
 # This will run the evaluation and save predictions in 'pred/Jamba-3B/'
-python pred.py --model Jamba-3B 
+python pred.py --model Jamba-Reasoning-3B
 ```
 
 This script will take a long time. It iterates through the LongBench dataset, sending each long-context prompt to your vLLM server and saving the model's response.
@@ -76,5 +86,5 @@ After pred.py finishes, a final script computes the scores based on the saved pr
 
 ```Bash
 # This reads the predictions from 'pred/Jamba-3B/' and calculates the final metrics
-python result.py --model Jamba-3B
+python result.py --model Jamba-Reasoning-3B
 ```
