@@ -88,3 +88,65 @@ After pred.py finishes, a final script computes the scores based on the saved pr
 # This reads the predictions from 'pred/Jamba-3B/' and calculates the final metrics
 python result.py --model Jamba-Reasoning-3B
 ```
+
+## Pure SSM Long-Context Track (Mamba)
+
+This repository also includes a **pure SSM (Mamba) long-context evaluation pipeline**
+under the `pure_ssm/` directory. It evaluates Mamba models at 8k / 16k / 32k
+context on LongBench-v2, Ada-LEval, and PG-19, and reports both quality and
+efficiency.
+
+### Models
+
+The SSM track uses:
+
+- `state-spaces/mamba-2.8b-hf`  (≈2.8B parameters)
+- `mistralai/Mamba-Codestral-7B-v0.1`  (≈7B parameters, Mamba-2)
+
+Both are run with **vLLM** and `mamba-ssm` using a shared decoding configuration
+(greedy decoding, temperature 0.0, `max_new_tokens = 256`).
+
+### Main notebook
+
+The end-to-end pipeline lives in:
+
+pure_ssm/notebooks/ssm_8k_16k_32k_final.ipynb
+
+Typical way to run it (on Google Colab):
+
+1. Mount Google Drive and clone this repo into:
+
+   ```text
+   /content/drive/MyDrive/SSM_experiment
+   ```
+
+2. Open `pure_ssm/notebooks/ssm_8k_16k_32k_final.ipynb` in Colab.
+
+3. Run all cells. The notebook will:
+
+   * Set up the environment (vLLM, `mamba-ssm`, etc.),
+   * Build or load 8k / 16k / 32k prompt sets for LongBench‑v2, Ada‑LEval, and PG‑19,
+   * Run pure‑SSM baselines for Mamba‑2.8B and Mamba‑Codestral‑7B at each context length,
+   * Run LongBench multiple‑choice evaluation via `pure_ssm/eval_longbench_mc.py`,
+   * Aggregate metrics into CSV files.
+
+### Outputs
+
+* **Summary CSVs** are written under:
+
+  ```text
+  pure_ssm/results/
+  ```
+
+  For example, `pure_ssm/results/ssm_8k.csv` contains quality + efficiency metrics
+  for the 8k context runs.
+
+* **Per‑run logs** (JSONL with prompts, completions, tokens/s, VRAM, etc.) are
+  written to a `pure_ssm_logs/` directory in your Google Drive root:
+
+  ```text
+  /content/drive/MyDrive/pure_ssm_logs/
+  ```
+
+These outputs can be used to compare pure SSM models against the Jamba
+and other baselines in this repository.
