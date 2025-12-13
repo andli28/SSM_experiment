@@ -1,0 +1,8 @@
+{
+  "name": "qwen-7b",
+  "hf_id": "Qwen/Qwen2.5-7B-Instruct",
+  "served": "Qwen2.5-7B-Instruct",
+  "family": "qwen",
+  "tokenizer_id": "Qwen/Qwen2.5-7B-Instruct",
+  "vllm_extra_args": ""
+}

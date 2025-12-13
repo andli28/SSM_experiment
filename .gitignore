@@ -2,6 +2,8 @@
 env/
 venv/
 *.venv/
+logs/
+wandb/
 
 # Jupyter Notebook Checkpoints
 .ipynb_checkpoints/
