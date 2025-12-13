@@ -6,6 +6,7 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parent.parent
 
+
 def load_json(p: Path) -> Dict[str, Any]:
     return json.loads(p.read_text(encoding="utf-8"))
 
@@ -170,13 +171,25 @@ def main():
     vram_cfg = g.get("vram_sampling", {})
     sampler = VramSampler(vram_csv, interval_ms=int(vram_cfg.get("interval_ms", 100)))
 
+
+    # force v0 engine for SSM-only models
+    if m.get("engine") == "v0":
+        os.environ["VLLM_USE_V1"] = "0"
+    else: 
+        os.environ["VLLM_USE_V1"] = "1"
+
+    print(os.environ["VLLM_USE_V1"])
+    server_env = os.environ.copy()
+
+
     vllm_cmd = build_vllm_cmd(m, g, args.ctx, port)
     # log the exact command for reproducibility
     server_log.write_text(" ".join(shlex.quote(x) for x in vllm_cmd) + "\n\n", encoding="utf-8")
 
     with server_log.open("a", encoding="utf-8") as lf:
-        proc = subprocess.Popen(vllm_cmd, stdout=lf, stderr=lf, preexec_fn=os.setsid)
-
+        server_env["VLLM_USE_V1"] = "0"
+        proc = subprocess.Popen(vllm_cmd, stdout=lf, stderr=lf, start_new_session=True, env = server_env)
+        
         def cleanup():
             try:
                 sampler.stop()

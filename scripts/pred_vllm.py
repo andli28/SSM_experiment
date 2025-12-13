@@ -169,7 +169,7 @@ def build_prompt(item: Dict[str, Any], args) -> Tuple[str, str]:
     return prompt, context
 
 
-def stream_chat_completion(
+def stream_completion(
     *,
     client: OpenAI,
     served_model_name: str,
@@ -178,37 +178,61 @@ def stream_chat_completion(
     top_p: float,
     max_new_tokens: int,
     seed: int,
+    use_chat: bool,
 ) -> Tuple[str, float, float]:
-    """
-    Returns (text, ttft_seconds, e2e_seconds)
-    """
     t0 = time.perf_counter()
-    stream = client.chat.completions.create(
-        model=served_model_name,
-        messages=[{"role": "user", "content": prompt}],
-        temperature=temperature,
-        top_p=top_p,
-        max_tokens=max_new_tokens,
-        seed=seed,
-        stream=True,
-    )
 
-    t_first = None
-    parts: List[str] = []
+    if use_chat:
+        stream = client.chat.completions.create(
+            model=served_model_name,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=temperature,
+            top_p=top_p,
+            max_tokens=max_new_tokens,
+            seed=seed,
+            stream=True,
+        )
+        t_first = None
+        parts: List[str] = []
+        for chunk in stream:
+            delta = chunk.choices[0].delta
+            piece = getattr(delta, "content", None) or ""
+            if piece:
+                if t_first is None:
+                    t_first = time.perf_counter()
+                parts.append(piece)
 
-    for chunk in stream:
-        delta = chunk.choices[0].delta
-        piece = getattr(delta, "content", None) or ""
-        if piece:
-            if t_first is None:
-                t_first = time.perf_counter()
-            parts.append(piece)
+    else:
+        stream = client.completions.create(
+            model=served_model_name,
+            prompt=prompt,
+            temperature=temperature,
+            top_p=top_p,
+            max_tokens=max_new_tokens,
+            seed=seed,
+            stream=True,
+        )
+        t_first = None
+        parts = []
+        for chunk in stream:
+            piece = getattr(chunk.choices[0], "text", None) or ""
+            if piece:
+                if t_first is None:
+                    t_first = time.perf_counter()
+                parts.append(piece)
 
     t_end = time.perf_counter()
     text = "".join(parts)
     ttft = (t_first - t0) if t_first is not None else (t_end - t0)
     e2e = t_end - t0
     return text, ttft, e2e
+
+
+def should_use_chat(model_name: str) -> bool:
+    s = model_name.lower()
+    # crude but works well in practice
+    return any(k in s for k in ["instruct", "chat", "it", "assistant"])
+
 
 
 # ----------------------------
@@ -324,7 +348,7 @@ def run_eval(args):
             # Encourage parsable answer without forcing CoT:
             prompt += "\n\nYou MUST end with: Final answer: X (X is A, B, C, or D)."
 
-            resp, ttft_s, e2e_s = stream_chat_completion(
+            resp, ttft_s, e2e_s = stream_completion(
                 client=client,
                 served_model_name=served_model_name,
                 prompt=prompt,
@@ -332,6 +356,7 @@ def run_eval(args):
                 top_p=1.0,
                 max_new_tokens=max_new,
                 seed=args.seed,
+                use_chat = should_use_chat(model_key),
             )
             if not resp:
                 continue
@@ -353,7 +378,7 @@ def run_eval(args):
                 prompt2 = truncate_prompt(prompt2, tok, prompt_budget)
                 prompt2 += "\n\nFinal answer:"
 
-                resp2, ttft2, e2e2 = stream_chat_completion(
+                resp2, ttft2, e2e2 = stream_completion(
                     client=client,
                     served_model_name=served_model_name,
                     prompt=prompt2,
@@ -361,6 +386,7 @@ def run_eval(args):
                     top_p=1.0,
                     max_new_tokens=16,
                     seed=args.seed,
+                    use_chat = should_use_chat(model_key),
                 )
                 resp = (resp2 or "").strip()
                 ttft_s += ttft2
@@ -372,7 +398,7 @@ def run_eval(args):
             # Reprompt if missing
             if pred is None:
                 reprompt = "Answer with ONLY one letter: A, B, C, or D.\nFinal answer:"
-                resp2, ttft2, e2e2 = stream_chat_completion(
+                resp2, ttft2, e2e2 = stream_completion(
                     client=client,
                     served_model_name=served_model_name,
                     prompt=reprompt,
@@ -380,6 +406,7 @@ def run_eval(args):
                     top_p=1.0,
                     max_new_tokens=5,
                     seed=args.seed,
+                    use_chat = should_use_chat(model_key),
                 )
                 reprompt_used += 1
                 ttft_s += ttft2

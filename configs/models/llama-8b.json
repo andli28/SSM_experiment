@@ -1,8 +1,9 @@
 {
-  "name": "llama-8b",
-  "hf_id": "meta-llama/Llama-3.1-8B-Instruct",
-  "served": "Llama-3.1-8B-Instruct",
-  "family": "llama",
-  "tokenizer_id": "meta-llama/Llama-3.1-8B-Instruct",
-  "vllm_extra_args": ""
+    "name": "llama-8b",
+    "hf_id": "meta-llama/Llama-3.1-8B-Instruct",
+    "served": "Llama-3.1-8B-Instruct",
+    "family": "llama",
+    "engine": "v1",
+    "tokenizer_id": "meta-llama/Llama-3.1-8B-Instruct",
+    "vllm_extra_args": ""
 }
