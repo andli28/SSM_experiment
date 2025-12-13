@@ -1,5 +1,5 @@
-# pred_vllm.py
-import os, json, time, re, argparse, threading, statistics
+# pred_vllm_fixed.py
+import os, json, time, re, argparse, threading, statistics, textwrap
 from typing import Optional, List, Dict, Any, Tuple
 from pathlib import Path
 
@@ -11,7 +11,7 @@ import tiktoken
 import wandb
 
 
-ROOT = Path(__file__).resolve().parent.parent   # repo root
+ROOT = Path(__file__).resolve().parent.parent  # repo root
 PROMPTS_DIR = ROOT / "scripts" / "prompts"
 
 def _read(p: Path) -> str:
@@ -25,15 +25,34 @@ template_0shot_cot_ans = _read(PROMPTS_DIR / "0shot_cot_ans.txt")
 
 VLLM_URL = os.environ.get("VLLM_URL", "http://127.0.0.1:8000/v1")
 VLLM_API_KEY = os.environ.get("VLLM_API_KEY", "token-abc123")
-TOKENIZER_ID_ENV = os.environ.get("TOKENIZER_ID")  # set by run_one.sh
+TOKENIZER_ID_ENV = os.environ.get("TOKENIZER_ID")
 
-# More robust answer extraction
+
+# ----------------------------
+# Answer extraction
+# ----------------------------
 ANSWER_PATTERNS = [
     re.compile(r"(?:final\s*answer|answer)\s*[:\-]\s*\(?([A-D])\)?", re.IGNORECASE),
     re.compile(r"the\s+correct\s+answer\s+is\s*\(?([A-D])\)?", re.IGNORECASE),
-    re.compile(r"^\s*\(?([A-D])\)?\s*$", re.IGNORECASE),
-    re.compile(r"\(([A-D])\)"),
+    re.compile(r"(?i)the\s+correct\s+answer\s+is\s*\(?\s*([A-D])\s*\)?", re.IGNORECASE)
+
 ]
+
+def extract_answer(response: str) -> Optional[str]:
+    if not response:
+        return None
+    text = response.replace("*", "").strip()
+    tail = text[-1000:]
+
+    # prefer explicit "final answer: X" style matches
+    for pat in ANSWER_PATTERNS:
+        m = pat.search(tail)
+        if m:
+            return m.group(1).upper()
+            
+    m = re.search(r"(?:^|\n)\s*([A-D])\s*$", text[-10:])
+    return m.group(1).upper() if m else None
+
 
 # ----------------------------
 # NVML VRAM sampler (peak MiB)
@@ -112,22 +131,6 @@ def truncate_prompt(prompt: str, tok, max_len: int) -> str:
 
 
 # ----------------------------
-# Answer extraction
-# ----------------------------
-def extract_answer(response: str) -> Optional[str]:
-    if not response:
-        return None
-    text = response.replace("*", "").strip()
-    tail = text[-300:]
-    for pat in ANSWER_PATTERNS:
-        m = pat.search(tail)
-        if m:
-            return m.group(1).upper()
-    m = re.search(r"\b([A-D])\b(?!.*\b[A-D]\b)", tail)
-    return m.group(1).upper() if m else None
-
-
-# ----------------------------
 # Misc helpers
 # ----------------------------
 def percentile(xs: List[float], p: float) -> float:
@@ -140,7 +143,6 @@ def percentile(xs: List[float], p: float) -> float:
     if f == c:
         return ys[f]
     return ys[f] + (ys[c] - ys[f]) * (k - f)
-
 
 def build_prompt(item: Dict[str, Any], args) -> Tuple[str, str]:
     context = item["context"]
@@ -169,6 +171,9 @@ def build_prompt(item: Dict[str, Any], args) -> Tuple[str, str]:
     return prompt, context
 
 
+# ----------------------------
+# vLLM streaming completion
+# ----------------------------
 def stream_completion(
     *,
     client: OpenAI,
@@ -201,7 +206,6 @@ def stream_completion(
                 if t_first is None:
                     t_first = time.perf_counter()
                 parts.append(piece)
-
     else:
         stream = client.completions.create(
             model=served_model_name,
@@ -213,7 +217,7 @@ def stream_completion(
             stream=True,
         )
         t_first = None
-        parts = []
+        parts: List[str] = []
         for chunk in stream:
             piece = getattr(chunk.choices[0], "text", None) or ""
             if piece:
@@ -230,9 +234,8 @@ def stream_completion(
 
 def should_use_chat(model_name: str) -> bool:
     s = model_name.lower()
-    # crude but works well in practice
-    return any(k in s for k in ["instruct", "chat", "it", "assistant"])
-
+    # avoid overly-broad tokens like "it"
+    return any(k in s for k in ["instruct", "chat", "assistant"])
 
 
 # ----------------------------
@@ -245,8 +248,7 @@ def run_eval(args):
     served_model_name = args.model  # MUST match vLLM --served-model-name
     tokenizer_id = (args.tokenizer_id or TOKENIZER_ID_ENV or model_key)
 
-    # Tokenizer: use tiktoken only if you truly evaluate OpenAI models.
-    # For vLLM-served HF models, HF tokenizer is preferred.
+    # Tokenizer
     if ("gpt" in model_key or "o1" in model_key) and not tokenizer_id:
         tok = tiktoken.encoding_for_model("gpt-4o-2024-08-06")
     else:
@@ -259,9 +261,12 @@ def run_eval(args):
     rep = args.rep
     safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", model_key)
     suffix = ""
-    if args.rag > 0: suffix += f"_rag{args.rag}"
-    if args.no_context: suffix += "_noctx"
-    if args.cot: suffix += "_cot"
+    if args.rag > 0:
+        suffix += f"_rag{args.rag}"
+    if args.no_context:
+        suffix += "_noctx"
+    if args.cot:
+        suffix += "_cot"
 
     out_file = os.path.join(args.save_dir, f"{safe}__ctx{ctx}__rep{rep}{suffix}.jsonl")
 
@@ -292,7 +297,7 @@ def run_eval(args):
     ]
 
     # Resume cache
-    has_data = {}
+    '''has_data = {}
     if os.path.exists(out_file):
         with open(out_file, encoding="utf-8") as f:
             for line in f:
@@ -300,8 +305,8 @@ def run_eval(args):
                     has_data[json.loads(line)["_id"]] = 1
                 except Exception:
                     pass
-
-    data = [x for x in data_all if x["_id"] not in has_data]
+    '''
+    data = [x for x in data_all] #if x["_id"] not in has_data]
     fout = open(out_file, "a", encoding="utf-8")
 
     # W&B init
@@ -337,6 +342,8 @@ def run_eval(args):
     counts = {"easy": 0, "hard": 0, "short": 0, "medium": 0, "long": 0, "total": 0}
     correct = {"easy": 0, "hard": 0, "short": 0, "medium": 0, "long": 0, "total": 0}
 
+    use_chat = should_use_chat(model_key)
+
     with VramSampler(poll_s=0.1) as vs:
         for item in tqdm(data):
             prompt, context = build_prompt(item, args)
@@ -356,7 +363,7 @@ def run_eval(args):
                 top_p=1.0,
                 max_new_tokens=max_new,
                 seed=args.seed,
-                use_chat = should_use_chat(model_key),
+                use_chat=use_chat,
             )
             if not resp:
                 continue
@@ -386,7 +393,7 @@ def run_eval(args):
                     top_p=1.0,
                     max_new_tokens=16,
                     seed=args.seed,
-                    use_chat = should_use_chat(model_key),
+                    use_chat=use_chat,
                 )
                 resp = (resp2 or "").strip()
                 ttft_s += ttft2
@@ -395,28 +402,41 @@ def run_eval(args):
             response = resp.strip()
             pred = extract_answer(response)
 
-            # Reprompt if missing
+            # Reprompt if missing (with question + choices)
             if pred is None:
-                reprompt = "Answer with ONLY one letter: A, B, C, or D.\nFinal answer:"
+                reprompt = textwrap.dedent(f"""\
+                    Return ONE letter on a single line: A, B, C, or D.
+
+                    Q: {item["question"].strip()}
+                    Prev: {response}
+                    A: {item["choice_A"].strip()}
+                    B: {item["choice_B"].strip()}
+                    C: {item["choice_C"].strip()}
+                    D: {item["choice_D"].strip()}
+
+                    Final answer:""")
                 resp2, ttft2, e2e2 = stream_completion(
                     client=client,
                     served_model_name=served_model_name,
                     prompt=reprompt,
                     temperature=0.0,
                     top_p=1.0,
-                    max_new_tokens=5,
+                    max_new_tokens=2,
                     seed=args.seed,
-                    use_chat = should_use_chat(model_key),
+                    use_chat=use_chat,
                 )
                 reprompt_used += 1
                 ttft_s += ttft2
                 e2e_s += e2e2
-                pred = extract_answer(resp2 or "")
+
+                pred2 = extract_answer(resp2 or "")
+                if pred2 is not None:
+                    pred = pred2
                 response = response + "\n\n[REPROMPT]\n" + (resp2 or "")
 
             judge = (pred == item["answer"])
 
-            # token counting for throughput
+            # token counting for throughput (count final response text)
             try:
                 n_out = len(_encode(tok, response))
             except Exception:
@@ -536,9 +556,12 @@ def run_eval(args):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--save_dir", "-s", type=str, default="results")
-    parser.add_argument("--cache_dir", type=str,
-                        default="/insomnia001/depts/edu/COMS-E6998-015/dwz2107/hf_datasets")
-    parser.add_argument("--model", "-m", type=str, default="Qwen2.5-9B-Instruct")
+    parser.add_argument(
+        "--cache_dir",
+        type=str,
+        default="/insomnia001/depts/edu/COMS-E6998-015/dwz2107/hf_datasets",
+    )
+    parser.add_argument("--model", "-m", type=str, default="Qwen2.5-7B-Instruct")
     parser.add_argument("--cot", "-cot", action="store_true")
     parser.add_argument("--no_context", "-nc", action="store_true")
     parser.add_argument("--rag", "-rag", type=int, default=0)
@@ -555,6 +578,7 @@ def main():
         print("[warn] n_proc ignored; forcing single-stream.")
         args.n_proc = 1
 
+    print(should_use_chat(args.model))
     run_eval(args)
 
 
