@@ -297,7 +297,7 @@ def run_eval(args):
     ]
 
     # Resume cache
-    '''has_data = {}
+    has_data = {}
     if os.path.exists(out_file):
         with open(out_file, encoding="utf-8") as f:
             for line in f:
@@ -305,7 +305,6 @@ def run_eval(args):
                     has_data[json.loads(line)["_id"]] = 1
                 except Exception:
                     pass
-    '''
     data = [x for x in data_all] #if x["_id"] not in has_data]
     fout = open(out_file, "a", encoding="utf-8")
 
@@ -322,7 +321,7 @@ def run_eval(args):
                 "tokenizer_id": tokenizer_id,
                 "vllm/url": VLLM_URL,
                 "protocol/seed": args.seed,
-                "protocol/temperature": 0.0,
+                "protocol/temperature": 0.1,
                 "protocol/top_p": 1.0,
                 "cot": bool(args.cot),
                 "no_context": bool(args.no_context),
@@ -359,7 +358,7 @@ def run_eval(args):
                 client=client,
                 served_model_name=served_model_name,
                 prompt=prompt,
-                temperature=0.0,
+                temperature=0.1,
                 top_p=1.0,
                 max_new_tokens=max_new,
                 seed=args.seed,
@@ -389,7 +388,7 @@ def run_eval(args):
                     client=client,
                     served_model_name=served_model_name,
                     prompt=prompt2,
-                    temperature=0.0,
+                    temperature=0.1,
                     top_p=1.0,
                     max_new_tokens=16,
                     seed=args.seed,
@@ -419,7 +418,7 @@ def run_eval(args):
                     client=client,
                     served_model_name=served_model_name,
                     prompt=reprompt,
-                    temperature=0.0,
+                    temperature=0.1,
                     top_p=1.0,
                     max_new_tokens=2,
                     seed=args.seed,

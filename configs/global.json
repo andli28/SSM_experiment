@@ -1,9 +1,9 @@
 {
   "seed": 42,
-  "repeats": 2,
+  "repeats": 1,
   "port": 8000,
 
-  "contexts": [8192, 16384, 32768],
+  "contexts": [131072],
 
   "vllm": {
     "dtype": "bfloat16",
