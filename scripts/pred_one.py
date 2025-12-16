@@ -1,266 +1,191 @@
 #!/usr/bin/env python3
+
 import argparse
 import json
 import os
-import shlex
-import signal
-import subprocess
-import sys
 import time
-import urllib.request
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List
+
+os.environ.setdefault("VLLM_ALLOW_LONG_MAX_MODEL_LEN", "1")
 
 ROOT = Path(__file__).resolve().parent.parent
+
+import pred_lb
+import pred_leval
+
+from vllm import LLM  # type: ignore
 
 
 def read_json(p: Path) -> Dict[str, Any]:
     return json.loads(p.read_text(encoding="utf-8"))
 
 
-def http_ok(url: str, timeout_s: float = 2.0) -> bool:
-    try:
-        with urllib.request.urlopen(url, timeout=timeout_s) as r:
-            status = getattr(r, "status", 0)
-            return 200 <= status < 300
-    except Exception:
-        return False
-
-
-def wait_ready(port: int, timeout_s: int) -> None:
-    url = f"http://127.0.0.1:{port}/v1/models"
-    t0 = time.time()
-    while time.time() - t0 < timeout_s:
-        if http_ok(url):
-            return
-        time.sleep(1)
-    raise RuntimeError(f"vLLM not ready after {timeout_s}s: {url}")
-
-
-class NvidiaSmiSampler:
-    """Samples GPU memory via nvidia-smi to a CSV file (no Python deps)."""
-
-    def __init__(self, out_csv: Path, interval_ms: int = 100):
-        self.out_csv = out_csv
-        self.interval_ms = interval_ms
-        self.proc: Optional[subprocess.Popen] = None
-        self._fh = None
-
-    def start(self) -> None:
-        self.out_csv.parent.mkdir(parents=True, exist_ok=True)
-        self._fh = self.out_csv.open("w", encoding="utf-8")
-        cmd = [
-            "nvidia-smi",
-            "--query-gpu=timestamp,index,memory.used",
-            "--format=csv,noheader,nounits",
-            "-lms",
-            str(self.interval_ms),
-        ]
-        self.proc = subprocess.Popen(cmd, stdout=self._fh, stderr=subprocess.DEVNULL)
-
-    def stop(self) -> None:
-        if self.proc is not None:
-            try:
-                self.proc.terminate()
-                self.proc.wait(timeout=2)
-            except Exception:
-                try:
-                    self.proc.kill()
-                except Exception:
-                    pass
-            self.proc = None
-
-        if self._fh is not None:
-            try:
-                self._fh.close()
-            except Exception:
-                pass
-            self._fh = None
-
-    def peak_mib(self) -> int:
-        if not self.out_csv.exists():
-            return 0
-        peak = 0
-        for line in self.out_csv.read_text(encoding="utf-8").splitlines():
-            # format: timestamp, index, memory.used
-            parts = [p.strip() for p in line.split(",")]
-            if len(parts) >= 3:
-                try:
-                    peak = max(peak, int(parts[2]))
-                except Exception:
-                    pass
-        return peak
-
-
-def build_vllm_cmd(model_cfg: Dict[str, Any], g: Dict[str, Any], ctx: int, port: int) -> list:
+def build_llm(model_cfg: Dict[str, Any], g: Dict[str, Any], ctx: int) -> LLM:
     hf_id = model_cfg["hf_id"]
-    served = model_cfg.get("served", hf_id)
+    vllm_cfg = g.get("vllm", {})
 
-    vllm = g.get("vllm", {})
-    extra: list[str] = []
-    if vllm.get("extra_args"):
-        extra += shlex.split(vllm["extra_args"])
-    if model_cfg.get("vllm_extra_args"):
-        extra += shlex.split(model_cfg["vllm_extra_args"])
+    dtype = vllm_cfg.get("dtype", "bfloat16")
+    tp = int(vllm_cfg.get("tensor_parallel_size", vllm_cfg.get("tp", 1)))
+    gpu_mem = float(vllm_cfg.get("gpu_memory_utilization", 0.90))
 
-    return [
-        sys.executable,
-        "-m",
-        "vllm.entrypoints.cli.main",
-        "serve",
-        hf_id,
-        "--trust-remote-code",
-        "--dtype",
-        vllm.get("dtype", "bfloat16"),
-        "--max-model-len",
-        str(ctx),
-        "--max-num-seqs",
-        str(vllm.get("max_num_seqs", 1)),
-        "--seed",
-        str(g.get("seed", 42)),
-        "--generation-config",
-        vllm.get("generation_config", "vllm"),
-        "--host",
-        "0.0.0.0",
-        "--port",
-        str(port),
-        "--gpu-memory-utilization",
-        str(vllm.get("gpu_memory_utilization", 0.90)),
-        "--served-model-name",
-        served,
-        *extra,
-    ]
-
-
-def run_pred(model_cfg: Dict[str, Any], g: Dict[str, Any], ctx: int, rep: int, port: int) -> int:
-    served = model_cfg.get("served", model_cfg["hf_id"])
-    tokenizer_id = model_cfg.get("tokenizer_id", model_cfg["hf_id"])
-    family = model_cfg.get("family", served)
-
-    env = os.environ.copy()
-    env.update(
-        {
-            "VLLM_URL": f"http://127.0.0.1:{port}/v1",
-            "CTX_LEN": str(ctx),
-            "SEED": str(g.get("seed", 42)),
-            "RUN_REP": str(rep),
-            "TOKENIZER_ID": tokenizer_id,
-        }
+    return LLM(
+        model=hf_id,
+        trust_remote_code=True,
+        dtype=dtype,
+        tensor_parallel_size=tp,
+        max_model_len=int(ctx),
+        gpu_memory_utilization=gpu_mem,
     )
-
-    wandb_cfg = g.get("wandb", {})
-    if wandb_cfg.get("enable", True):
-        env["WANDB_PROJECT"] = wandb_cfg.get("project", "longbench-vllm")
-        if wandb_cfg.get("entity"):
-            env["WANDB_ENTITY"] = wandb_cfg["entity"]
-        env["WANDB_GROUP"] = family
-        env["WANDB_NAME"] = f"{served}__ctx{ctx}__rep{rep}"
-
-    results_dir = (ROOT / g.get("paths", {}).get("results_dir", "results")).resolve()
-    results_dir.mkdir(parents=True, exist_ok=True)
-
-    cmd = [
-        sys.executable,
-        str((ROOT / "scripts" / "pred_vllm.py").resolve()),
-        "-m",
-        served,
-        "-s",
-        str(results_dir),
-        "-n",
-        "1",
-    ]
-    if wandb_cfg.get("enable", True):
-        cmd.append("--wandb")
-
-    return subprocess.call(cmd, env=env)
-
-
-def kill_process_group(proc: subprocess.Popen, timeout_s: int = 10) -> None:
-    if proc.poll() is not None:
-        return
-    try:
-        os.killpg(proc.pid, signal.SIGINT)
-    except Exception:
-        return
-    try:
-        proc.wait(timeout=timeout_s)
-    except Exception:
-        try:
-            os.killpg(proc.pid, signal.SIGKILL)
-        except Exception:
-            pass
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model_cfg", required=True, help="Path to configs/models/*.json")
+    ap.add_argument("--model_cfg", required=True)
     ap.add_argument("--ctx", type=int, required=True)
     ap.add_argument("--global_cfg", default=str(ROOT / "configs" / "global.json"))
-    ap.add_argument("--port", type=int, default=None)
     args = ap.parse_args()
 
     g = read_json(Path(args.global_cfg))
     m = read_json(Path(args.model_cfg))
 
-    port = int(args.port if args.port is not None else g.get("port", 8000))
-    repeats = int(g.get("repeats", 2))
-
-    logs_dir = (ROOT / g.get("paths", {}).get("logs_dir", "logs")).resolve()
-    logs_dir.mkdir(parents=True, exist_ok=True)
-
     served = m.get("served", m["hf_id"])
-    tag = f"{served}__ctx{args.ctx}"
-    server_log = logs_dir / f"{tag}.server.log"
-    vram_csv = logs_dir / f"{tag}.vram.csv"
+    family = m.get("family", served)
 
-    vram_cfg = g.get("vram_sampling", {})
-    sampler = NvidiaSmiSampler(vram_csv, interval_ms=int(vram_cfg.get("interval_ms", 100)))
+    repeats = int(g.get("repeats", 1))
+    seed = int(g.get("seed", 42))
 
-    # Respect model engine selection (v0 => VLLM_USE_V1=0, otherwise 1)
-    use_v1 = (m.get("engine") != "v0")
-    server_env = os.environ.copy()
-    server_env["VLLM_USE_V1"] = "1" if use_v1 else "0"
-    server_env["VLLM_ALLOW_LONG_MAX_MODEL_LEN"] = "1"
+    results_dir = (ROOT / g.get("paths", {}).get("results_dir", "results")).resolve()
+    results_dir.mkdir(parents=True, exist_ok=True)
 
-    vllm_cmd = build_vllm_cmd(m, g, args.ctx, port)
-    server_log.write_text(" ".join(shlex.quote(x) for x in vllm_cmd) + "\n\n", encoding="utf-8")
+    bench = str(g.get("benchmark", "longbench")).lower()
+    batch_size = int(g.get("batch_size", g.get("vllm", {}).get("batch_size", 16)))
 
-    with server_log.open("a", encoding="utf-8") as lf:
-        proc = subprocess.Popen(
-            vllm_cmd,
-            stdout=lf,
-            stderr=lf,
-            start_new_session=True,
-            env=server_env,
-        )
-        try:
-            wait_ready(port, int(g.get("timeouts", {}).get("server_ready_seconds", 180)))
+    wandb_cfg = g.get("wandb", {})
+    wandb_enable = bool(wandb_cfg.get("enable", True))
+    if wandb_enable:
+        os.environ.setdefault("WANDB_PROJECT", wandb_cfg.get("project", "bench-vllm"))
+        if wandb_cfg.get("entity"):
+            os.environ["WANDB_ENTITY"] = wandb_cfg["entity"]
+        os.environ["WANDB_GROUP"] = family
 
-            if vram_cfg.get("enable", True):
-                sampler.start()
+    t0 = time.perf_counter()
+    llm = build_llm(m, g, args.ctx)
+    t1 = time.perf_counter()
 
-            for rep in range(1, repeats + 1):
-                rc = run_pred(m, g, args.ctx, rep, port)
-                if rc != 0:
-                    raise RuntimeError(f"pred_vllm failed (rc={rc}) on rep={rep}")
-        finally:
-            try:
-                sampler.stop()
-            finally:
-                kill_process_group(proc)
+    summaries: List[Dict[str, Any]] = []
 
-    print(
-        json.dumps(
-            {
-                "model": m.get("name", served),
-                "ctx": args.ctx,
-                "peak_vram_mib": sampler.peak_mib(),
-                "server_log": str(server_log),
-                "vram_csv": str(vram_csv),
-            },
-            indent=2,
-        )
-    )
+    for rep in range(1, repeats + 1):
+        os.environ["SEED"] = str(seed)
+        os.environ["RUN_REP"] = str(rep)
+        os.environ["CTX_LEN"] = str(args.ctx)
+        os.environ["TOKENIZER_ID"] = str(m.get("tokenizer_id", m["hf_id"]))
+
+        if bench in ("longbench", "lb"):
+            if wandb_enable:
+                os.environ["WANDB_NAME"] = (
+                    f"{served}__longbench__ctx{args.ctx}__rep{rep}"
+                )
+
+            lb_args = argparse.Namespace(
+                save_dir=str(results_dir),
+                cache_dir=g.get(
+                    "hf_cache_dir",
+                    os.environ.get("HF_DATASETS_CACHE", str(ROOT / "hf_datasets")),
+                ),
+                model=m["hf_id"],
+                served_name=served,
+                tokenizer_id=m.get("tokenizer_id", m["hf_id"]),
+                max_len=int(args.ctx),
+                seed=seed,
+                rep=rep,
+                temperature=float(g.get("longbench", {}).get("temperature", 0.1)),
+                top_p=float(g.get("longbench", {}).get("top_p", 1.0)),
+                max_new_tokens=int(g.get("longbench", {}).get("max_new_tokens", 128)),
+                batch_size=batch_size,
+                dtype=g.get("vllm", {}).get("dtype", "bfloat16"),
+                tp=int(
+                    g.get("vllm", {}).get(
+                        "tensor_parallel_size", g.get("vllm", {}).get("tp", 1)
+                    )
+                ),
+                gpu_memory_utilization=float(
+                    g.get("vllm", {}).get("gpu_memory_utilization", 0.90)
+                ),
+                force_chat=bool(g.get("longbench", {}).get("force_chat", False)),
+                force_completion=bool(
+                    g.get("longbench", {}).get("force_completion", False)
+                ),
+                wandb=wandb_enable,
+                log_every=int(g.get("wandb", {}).get("log_every", 200)),
+            )
+            summaries.append(
+                {"bench": "longbench", "rep": rep, **pred_lb.run_eval(lb_args, llm=llm)}
+            )
+
+        elif bench in ("adaleval", "ada-leval", "leval"):
+            if wandb_enable:
+                os.environ["WANDB_NAME"] = (
+                    f"{served}__adaleval__ctx{args.ctx}__rep{rep}"
+                )
+
+            adacfg = g.get("adaleval", {})
+            datasets = adacfg.get("datasets", "auto")  # "auto" or list
+
+            leval_args = argparse.Namespace(
+                data=(None if datasets == "auto" else datasets),
+                auto=bool(datasets == "auto"),
+                model=m["hf_id"],
+                served_name=served,
+                save_dir=str(results_dir),
+                data_dir=str((ROOT / "data").resolve()),
+                dataset_mode=str(adacfg.get("dataset_mode", "normal")),
+                temperature=float(adacfg.get("temperature", 0.0)),
+                top_p=float(adacfg.get("top_p", 1.0)),
+                max_new_tokens=int(adacfg.get("max_new_tokens", 16)),
+                batch_size=batch_size,
+                seed=seed,
+                rep=rep,
+                ctx_len=int(args.ctx),
+                tokenizer_id=m.get("tokenizer_id", m["hf_id"]),
+                dtype=g.get("vllm", {}).get("dtype", "bfloat16"),
+                tp=int(
+                    g.get("vllm", {}).get(
+                        "tensor_parallel_size", g.get("vllm", {}).get("tp", 1)
+                    )
+                ),
+                gpu_memory_utilization=float(
+                    g.get("vllm", {}).get("gpu_memory_utilization", 0.90)
+                ),
+                force_chat=bool(adacfg.get("force_chat", False)),
+                force_completion=bool(adacfg.get("force_completion", False)),
+                wandb=wandb_enable,
+                log_every=int(g.get("wandb", {}).get("log_every", 200)),
+            )
+            summaries.append(
+                {
+                    "bench": "adaleval",
+                    "rep": rep,
+                    **pred_leval.run_eval(leval_args, llm=llm),
+                }
+            )
+
+        else:
+            raise ValueError(
+                f"Unknown benchmark '{bench}' (use 'longbench' or 'adaleval')."
+            )
+
+    out = {
+        "model": m.get("name", served),
+        "hf_id": m["hf_id"],
+        "served": served,
+        "ctx": int(args.ctx),
+        "repeats": repeats,
+        "batch_size": batch_size,
+        "load_time_s": float(t1 - t0),
+        "summaries": summaries,
+    }
+    print(json.dumps(out, indent=2))
 
 
 if __name__ == "__main__":

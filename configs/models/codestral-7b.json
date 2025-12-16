@@ -1,0 +1,10 @@
+{
+    "name": "mamba-codestral-7b",
+    "hf_id": "mistralai/Mamba-Codestral-7B-v0.1",
+    "served": "mamba-codestral-7b",
+    "family": "mamba",
+    "params_b": 7.0,
+    "engine": "v1",
+    "tokenizer_id": "mistralai/Mamba-Codestral-7B-v0.1",
+    "vllm_extra_args": "--tokenizer-mode mistral"
+}

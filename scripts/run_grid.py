@@ -5,14 +5,21 @@ from typing import Dict, Any, List
 
 ROOT = Path(__file__).resolve().parent.parent
 
+
 def load_json(p: Path) -> Dict[str, Any]:
     return json.loads(p.read_text(encoding="utf-8"))
+
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--global_cfg", default=str(ROOT / "configs" / "global.json"))
     ap.add_argument("--models_dir", default=str(ROOT / "configs" / "models"))
-    ap.add_argument("--only", nargs="*", default=None, help="Optional model names to run (e.g., llama-8b qwen-7b)")
+    ap.add_argument(
+        "--only",
+        nargs="*",
+        default=None,
+        help="Optional model names to run (e.g., llama-8b qwen-7b)",
+    )
     args = ap.parse_args()
 
     g = load_json(Path(args.global_cfg))
@@ -33,15 +40,19 @@ def main():
             cmd = [
                 sys.executable,
                 str((ROOT / "scripts" / "pred_one.py").resolve()),
-                "--model_cfg", str(cfg),
-                "--ctx", str(ctx),
-                "--global_cfg", str(Path(args.global_cfg).resolve()),
+                "--model_cfg",
+                str(cfg),
+                "--ctx",
+                str(ctx),
+                "--global_cfg",
+                str(Path(args.global_cfg).resolve()),
             ]
             print("\n=== RUN ===")
             print(" ".join(cmd))
             rc = subprocess.call(cmd)
             if rc != 0:
                 raise SystemExit(rc)
+
 
 if __name__ == "__main__":
     main()
