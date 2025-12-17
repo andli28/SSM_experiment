@@ -351,7 +351,7 @@ def run_eval(args, llm: Optional[LLM] = None) -> Dict[str, Any]:
                         "latency_e2e_s": float(bt),
                         "out_tokens": int(n_out),
                     }
-                    dump(res, out_file)
+                    dump(res, str(out_file))
 
                     lat_e2e_all.append(float(bt))
                     out_tokens_all.append(int(n_out))

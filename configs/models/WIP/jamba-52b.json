@@ -1,0 +1,10 @@
+{
+  "name": "jamba-52b-v0.1",
+  "hf_id": "ai21labs/Jamba-v0.1",
+  "served": "jamba-52b-v0.1",
+  "family": "jamba",
+  "params_b": 52.0,
+  "engine": "v1",
+  "tokenizer_id": "ai21labs/Jamba-v0.1",
+  "vllm_extra_args": ""
+}

@@ -1,0 +1,10 @@
+{
+    "name": "jamba-3b",
+    "hf_id": "ai21labs/AI21-Jamba-Reasoning-3B",
+    "served": "jamba-3b",
+    "family": "jamba",
+    "params_b": 7.0,
+    "engine": "v1",
+    "tokenizer_id": "ai21labs/AI21-Jamba-Reasoning-3B",
+    "vllm_extra_args": "--mamba-ssm-cache-dtype=float32"
+}

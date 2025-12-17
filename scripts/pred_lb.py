@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 """
 LongBench-v2 evaluator using in-process vLLM (LLM.generate) with batching.
-
-- No RAG / CoT modes (intentionally)
-- Optional W&B logging (pass --wandb)
-
 """
 
 import argparse
@@ -21,6 +17,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from datasets import load_dataset
 from tqdm import tqdm
 from transformers import AutoTokenizer
+
+os.environ.setdefault("VLLM_ALLOW_LONG_MAX_MODEL_LEN", "1")
 
 from vllm import LLM, SamplingParams  # type: ignore
 
@@ -77,6 +75,8 @@ def build_prompt(item: Dict[str, Any]) -> Tuple[str, str]:
 ANSWER_PATTERNS = [
     re.compile(r"(?:final\s*answer|answer)\s*[:\-]\s*\(?([A-D])\)?", re.IGNORECASE),
     re.compile(r"the\s+correct\s+answer\s+is\s*\(?([A-D])\)?", re.IGNORECASE),
+    re.compile(r"the\s+correct\s+answer\s+is\s*[:\-]?\s*\(?\s*([A-D])\s*\)?", re.IGNORECASE),
+    re.compile(r"\\boxed\s*\{\s*([A-D])\s*\}", re.IGNORECASE)
 ]
 
 
@@ -84,7 +84,7 @@ def extract_answer(response: str) -> Optional[str]:
     if not response:
         return None
     text = response.replace("*", "").strip()
-    tail = text[-1000:]
+    tail = text[-128:]
     for pat in ANSWER_PATTERNS:
         m = pat.search(tail)
         if m:
@@ -114,7 +114,7 @@ def truncate_prompt(prompt: str, tok, max_len: int) -> str:
 
 def should_use_chat(model_name: str) -> bool:
     s = (model_name or "").lower()
-    return any(k in s for k in ["instruct", "chat", "assistant"])
+    return any(k in s for k in ["instruct", "chat", "assistant", "jamba"])
 
 
 def maybe_apply_chat_template(tok, prompt: str, use_chat: bool) -> str:
@@ -208,7 +208,7 @@ def parse_args():
     p.add_argument("--seed", type=int, default=int(os.environ.get("SEED", "42")))
     p.add_argument("--rep", type=int, default=int(os.environ.get("RUN_REP", "1")))
 
-    p.add_argument("--temperature", type=float, default=0.1)
+    p.add_argument("--temperature", type=float, default=0.0)
     p.add_argument("--top_p", type=float, default=1.0)
     p.add_argument("--max_new_tokens", type=int, default=16)
     p.add_argument("--batch_size", type=int, default=16)
@@ -333,15 +333,15 @@ def run_eval(args, llm: Optional[LLM] = None) -> Dict[str, Any]:
     wall_time_total = 0.0
 
     sp_main = SamplingParams(
-        temperature=float(args.temperature),
+        temperature=float(0.1),
+        max_tokens=128,
         top_p=float(args.top_p),
-        max_tokens=int(args.max_new_tokens),
-        seed=int(args.seed),
+        seed=int(0),
     )
     sp_rep = SamplingParams(
         temperature=float(args.temperature),
         top_p=float(args.top_p),
-        max_tokens=2,
+        max_tokens=1,
         seed=int(args.seed),
     )
 
@@ -355,12 +355,10 @@ def run_eval(args, llm: Optional[LLM] = None) -> Dict[str, Any]:
                 for item in batch_items:
                     p_raw, ctx = build_prompt(item)
                     p_raw = truncate_prompt(p_raw, tok, prompt_budget)
-                    p_raw += (
-                        "\n\nYou MUST end with: Final answer: X (X is A, B, C, or D)."
-                    )
+
                     prompts.append(maybe_apply_chat_template(tok, p_raw, use_chat))
                     contexts.append(ctx)
-
+                print(prompts[0][-100:])
                 t0 = time.perf_counter()
                 outs = llm.generate(prompts, sp_main)  # type: ignore[arg-type]
                 t1 = time.perf_counter()

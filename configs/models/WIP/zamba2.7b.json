@@ -1,0 +1,10 @@
+{
+  "name": "zamba2-2.7b",
+  "hf_id": "Zyphra/Zamba2-2.7B",
+  "served": "zamba2-2.7b",
+  "family": "zamba2",
+  "params_b": 2.7,
+  "engine": "v1",
+  "tokenizer_id": "mistralai/Mistral-7B-v0.1",
+  "vllm_extra_args": "--trust-remote-code --mamba-ssm-cache-dtype=float32"
+}

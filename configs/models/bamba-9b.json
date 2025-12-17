@@ -1,0 +1,10 @@
+{
+  "name": "bamba-9b-v1",
+  "hf_id": "ibm-ai-platform/Bamba-9B-v1",
+  "served": "bamba-9b-v1",
+  "family": "bamba",
+  "params_b": 9.8,
+  "engine": "v1",
+  "tokenizer_id": "ibm-ai-platform/Bamba-9B-v1",
+  "vllm_extra_args": ""
+}

@@ -10,7 +10,7 @@
       "gpu_memory_utilization": 0.90,
       "max_num_seqs": 16,
       "generation_config": "vllm",
-      "tensor_parallel_size": 2
+      "tensor_parallel_size": 1
     },
 
     "wandb": {
@@ -38,7 +38,7 @@
     
     "vram_sampling": {
         "enable": true,
-        "interval_ms": 500
+        "interval_ms": 1000
     }
 }
     

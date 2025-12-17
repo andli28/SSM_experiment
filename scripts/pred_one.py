@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 os.environ.setdefault("VLLM_ALLOW_LONG_MAX_MODEL_LEN", "1")
+os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
+#os.environ["VLLM_LOGGING_LEVEL"] = "DEBUG"
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -44,6 +46,7 @@ def main() -> None:
     ap.add_argument("--model_cfg", required=True)
     ap.add_argument("--ctx", type=int, required=True)
     ap.add_argument("--global_cfg", default=str(ROOT / "configs" / "global.json"))
+    ap.add_argument("--bench", default="longbench") 
     args = ap.parse_args()
 
     g = read_json(Path(args.global_cfg))
@@ -58,7 +61,7 @@ def main() -> None:
     results_dir = (ROOT / g.get("paths", {}).get("results_dir", "results")).resolve()
     results_dir.mkdir(parents=True, exist_ok=True)
 
-    bench = str(g.get("benchmark", "longbench")).lower()
+    bench = args.bench.lower()
     batch_size = int(g.get("batch_size", g.get("vllm", {}).get("batch_size", 16)))
 
     wandb_cfg = g.get("wandb", {})
@@ -99,9 +102,9 @@ def main() -> None:
                 max_len=int(args.ctx),
                 seed=seed,
                 rep=rep,
-                temperature=float(g.get("longbench", {}).get("temperature", 0.1)),
+                temperature=float(g.get("longbench", {}).get("temperature", 0.6)),
                 top_p=float(g.get("longbench", {}).get("top_p", 1.0)),
-                max_new_tokens=int(g.get("longbench", {}).get("max_new_tokens", 128)),
+                max_new_tokens=int(g.get("longbench", {}).get("max_new_tokens", 2048)),
                 batch_size=batch_size,
                 dtype=g.get("vllm", {}).get("dtype", "bfloat16"),
                 tp=int(

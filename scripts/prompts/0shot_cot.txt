@@ -1,10 +1,10 @@
 Please read the following text and answer the questions below.
+What is the correct answer to this question: $Q$
 
 <text>
 $DOC$
 </text>
 
-What is the correct answer to this question: $Q$
 Choices:
 (A) $C_A$
 (B) $C_B$
