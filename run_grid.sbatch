@@ -4,7 +4,7 @@
 #SBATCH --job-name=run_grid           # The job name.
 #SBATCH --gres=gpu:1                  # Request 1 gpu (Up to 2 gpus per GPU node)
 #SBATCH -c 2                          # CPU cores to use.
-#SBATCH --time=0-10:30                # Time in D-HH:MM
+#SBATCH --time=10:30:00                # Time
 #SBATCH --mem-per-cpu=8gb             # Memory per CPU core.
 
 set -e
