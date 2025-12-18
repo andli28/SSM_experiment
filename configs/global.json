@@ -1,0 +1,44 @@
+{
+    "seed": 0,
+    "repeats": 1,
+    "port": 8001,
+    
+    "contexts": [131072],
+    
+    "vllm": {
+      "dtype": "bfloat16",
+      "gpu_memory_utilization": 0.90,
+      "max_num_seqs": 16,
+      "generation_config": "vllm",
+      "tensor_parallel_size": 2
+    },
+
+    "wandb": {
+        "enable": true,
+        "project": "longbench-vllm",
+        "entity": ""
+    },
+
+    "adaleval": {
+        "datasets": ["textsort_128k", "stackselect_128k"],
+        "dataset_mode": "normal",
+        "max_new_tokens": 16,
+        "temperature": 0.1,
+        "top_p": 1.0
+    },
+    
+    "paths": {
+        "results_dir": "results",
+        "logs_dir": "logs"
+    },
+    
+    "timeouts": {
+        "server_ready_seconds": 180
+    },
+    
+    "vram_sampling": {
+        "enable": true,
+        "interval_ms": 500
+    }
+}
+    

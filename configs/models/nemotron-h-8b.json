@@ -1,0 +1,10 @@
+{
+  "name": "nemotron-h-8b-reasoning-128k",
+  "hf_id": "nvidia/Nemotron-H-8B-Reasoning-128K",
+  "served": "nemotron-h-8b-r128k",
+  "family": "nemotron-h",
+  "params_b": 8.0,
+  "engine": "v1",
+  "tokenizer_id": "nvidia/Nemotron-H-8B-Reasoning-128K",
+  "vllm_extra_args": "--mamba-ssm-cache-dtype float32"
+}
