@@ -1,16 +1,4 @@
-# Python Virtual Environments
-env/
-venv/
-*.venv/
-
-# Jupyter Notebook Checkpoints
-.ipynb_checkpoints/
-
-# IDE/Tool-specific files
-.virtual_documents/
-
-# Python bytecode and cache
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
+wandb
+.ipynb_checkpoints
+env
+.virtual_documents
