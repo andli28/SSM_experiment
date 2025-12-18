@@ -3,6 +3,8 @@
 - https://pypi.org/project/mamba-ssm/
 - https://www.ai21.com/blog/introducing-jamba-reasoning-3b/
 
+Link to wandb project board: https://wandb.ai/davidwz2003-columbia-university/projects
+
 ### Installation (in a virtual environment)
 
 Clone the repo
