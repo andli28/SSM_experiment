@@ -1,6 +1,4 @@
 absl-py==2.3.1
-# Editable install with no version control (ada_leval==0.1.0)
--e /insomnia001/home/dwz2107/Ada-LEval
 aiohappyeyeballs==2.6.1
 aiohttp==3.13.2
 aiosignal==1.4.0
