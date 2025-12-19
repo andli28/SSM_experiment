@@ -1,11 +1,11 @@
-### Resources
+## Resources
 - https://longbench2.github.io/
 - https://pypi.org/project/mamba-ssm/
 - https://www.ai21.com/blog/introducing-jamba-reasoning-3b/
 
 Link to wandb project board: https://wandb.ai/davidwz2003-columbia-university/projects
 
-### Installation (in a virtual environment)
+## Installation (in a virtual environment)
 
 Clone the repo
 ```bash
@@ -28,10 +28,10 @@ python scripts/pred_one.py --model_cfg (path_to_model_config) --ctx (max_context
 
 Run sweep:
 
-Set the context lengths required in /configs/globals
+Set the context lengths to run in /configs/globals
 
 ```bash
-python run_grid.py
+python scripts/run_grid.py
 ```
 
 Will run all models under /config/models at the specified context lengths.
@@ -39,20 +39,19 @@ Will run all models under /config/models at the specified context lengths.
 Note that for Qwen-7b, the rope scaling factor must be adjusted for the largest context being run.
 
 
-###Results
+### Results
 
-If you want to log results automatically, enable wandb in the global config. Otherwise results and more details can be viewed through /results/view.ipynb
-
-
-###Configs
-
-General config values are located in /configs/global.json
-Model specific configs are located in /configs/models/model.json
+If you want to log results online automatically, enable wandb in the global config. 
+Results and more details can be viewed locally through /results/view.ipynb
 
 
-###Credit
+### Configs
 
-We utilize some of the original code from LongBench and AdaLeval's prediction pipelines for our project
+General config values are located in /configs/global.json. This controls general VLLM settings like batch size and temperature as well as benchmark specific settings like max_new_tokens
+
+Model specific configs are located in /configs/models/model.json. Models can be added or removed from this section
+
+The prompt for LongBench is located in /scripts/prompts
 
 
 ## Pure SSM Long-Context Track (Mamba) Initial tests (Located in /test_noteooks)
@@ -116,3 +115,11 @@ Typical way to run it (on Google Colab):
 
 These outputs can be used to compare pure SSM models against the Jamba
 and other baselines in this repository.
+
+
+#
+
+## Credit
+
+We utilize some of the original code from Ada_Leval LongBench's prediction pipelines for our project, along with their prepared datasets from HuggingFace. Additionally we use Vllm for our model inference along with many other open source packages.
+
