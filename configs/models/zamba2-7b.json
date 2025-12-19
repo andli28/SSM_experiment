@@ -1,0 +1,10 @@
+{
+    "name": "zamba2-7b",
+    "hf_id": "Zyphra/Zamba2-7B",
+    "served": "zamba2-7b",
+    "family": "zamba",
+    "params_b": 7.0,
+    "engine": "v1",
+    "tokenizer_id": "Zyphra/Zamba2-7B",
+    "vllm_extra_args": ""
+}
