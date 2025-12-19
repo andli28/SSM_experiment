@@ -1,4 +1,22 @@
-wandb
-.ipynb_checkpoints
-env
-.virtual_documents
+# Python Virtual Environments
+env/
+venv/
+*.venv/
+logs/
+wandb/
+prompt_sets/
+stackselect*.json
+textsort*.json
+hf_datasets/
+
+# Jupyter Notebook Checkpoints
+.ipynb_checkpoints/
+
+# IDE/Tool-specific files
+.virtual_documents/
+
+# Python bytecode and cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
