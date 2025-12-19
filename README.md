@@ -58,10 +58,10 @@ pip install -r requirements.txt
 ```
 
 ### B. Wandb Dashboard
-View training and evaluation metrics here: https://api.wandb.ai/links/davidwz2003-columbia-university/57zty5qi
+View evaluation metrics here: https://api.wandb.ai/links/davidwz2003-columbia-university/57zty5qi
 
-### C. Specify for Training or For Inference or if Both
-This repo focuses on inference/evaluation sweeps. For a single model/context run:
+### C. Specify Which Models to Perform Inference on
+This repo focuses on inference sweeps. For a single model run:
 ```bash
 python scripts/pred_one.py --model_cfg configs/models/<model>.json --ctx <max_context_length>
 ```
@@ -187,5 +187,17 @@ Model specific configs are located in `configs/models/<model>.json`
 
 ---
 ## 8. Credits
-
-We utilize some of the original code from LongBench and AdaLeval's prediction pipelines for our project.
+- Datasets: We acknowledge and thank the maintainers of LongBench‑v2, Ada‑LEval, and PG‑19 for making their datasets available for research.
+  - LongBench‑v2: https://longbench2.github.io/
+  - Ada‑LEval: https://github.com/Alibaba-NLP/Ada-LEval
+  - PG‑19: https://huggingface.co/datasets/pg19
+- Serving engine: vLLM (0.11.2) was used for inference and long‑context serving — https://vllm.ai/
+- SSM kernels: `mamba-ssm` library was used for Mamba models — https://pypi.org/project/mamba-ssm/
+- Model providers:
+  - Meta AI — Llama‑3.1‑8B‑Instruct
+  - Alibaba — Qwen2.5‑7B‑Instruct
+  - Mistral AI — Mamba‑Codestral‑7B v0.1
+  - NVIDIA — Nemotron‑H‑8B‑r128k
+  - State‑Spaces (mamba‑2.8b‑hf)
+  - AI21 Labs — Jamba‑3B‑Reasoning
+- Prior work: We utilize some of the original code from LongBench and Ada‑LEval prediction pipelines in this project.
