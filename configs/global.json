@@ -10,7 +10,8 @@
       "gpu_memory_utilization": 0.90,
       "max_num_seqs": 16,
       "generation_config": "vllm",
-      "tensor_parallel_size": 2
+      "tensor_parallel_size": 1,
+      "batch_size": 16
     },
 
     "wandb": {
@@ -26,7 +27,11 @@
         "temperature": 0.1,
         "top_p": 1.0
     },
-    
+    "longbench": {
+        "max_new_tokens": 1024,
+        "temperature": 0.1,
+        "top_p": 1.0
+    },
     "paths": {
         "results_dir": "results",
         "logs_dir": "logs"
