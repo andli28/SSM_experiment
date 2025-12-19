@@ -1,4 +1,4 @@
-# HPML Project: An Analysis of Long-Context Scaling With State Space Machines
+# SLLM Project: An Analysis of Long-Context Scaling With State Space Machines
 
 ## Team Information
 - **Team Name**: Team DAY
@@ -13,9 +13,9 @@ Evaluate long-context language models and state space models (SSMs) on LongBench
 
 ---
 ## 2. Model Description
-- Architectures: Transformer LLMs (Llama-3.1-8B-Instruct, Qwen2.5-7B-Instruct, Jamba-3B, Nemotron-h-8b-r128k) and SSMs (Mamba-2.8B, Mamba-Codestral-7B).
-- Frameworks: PyTorch with vLLM 0.11.2; \`mamba-ssm\` for SSM kernels.
-- Customization: Context-length scaling via per-model JSON configs; shared greedy decoding (\`temperature=0.1\`, \`max_new_tokens=256\`, batch_size=16 for efficient serving); note Qwen-7B requires YARN rope-scaling adjustment for largest contexts.
+- **Architectures**: Transformer LLMs (Llama-3.1-8B-Instruct, Qwen2.5-7B-Instruct, Jamba-3B, Nemotron-h-8b-r128k) and SSMs (Mamba-2.8B, Mamba-Codestral-7B).
+- **Frameworks**: PyTorch with vLLM 0.11.2; `mamba-ssm` for SSM kernels.
+- **Customization**: Context-length scaling via per-model JSON configs; shared greedy decoding (`temperature=0.1`, `max_new_tokens=256`, batch_size=16 for efficient serving); note Qwen-7B requires YARN rope-scaling adjustment for largest contexts.
 
 ---
 ## 3. Final Results Summary
@@ -44,48 +44,50 @@ Null prediction rates (indicating unparseable or non-compliant outputs) generall
 | Benchmark | LongBench-v2 |
 | Device | NVIDIA A6000 (48 GB VRAM) |
 
-Refer to JSONL logs in \`results/\` and \`pure_ssm/outputs/pure_ssm_logs/\` for detailed run-level metrics.
+Refer to JSONL logs in `results/` and `pure_ssm/outputs/pure_ssm_logs/` for detailed run-level metrics.
 
 ---
 ## 4. Reproducibility Instructions
 ### A. Requirements
 Clone and install:
-\`\`\`bash
+
+```bash
 git clone https://github.com/andli28/SSM_experiment
 cd SSM_experiment
 pip install -r requirements.txt
-\`\`\`
+```
 
 ### B. Wandb Dashboard
 View training and evaluation metrics here: https://api.wandb.ai/links/davidwz2003-columbia-university/57zty5qi
 
 ### C. Specify for Training or For Inference or if Both
 This repo focuses on inference/evaluation sweeps. For a single model/context run:
-\`\`\`bash
+```bash
 python scripts/pred_one.py --model_cfg configs/models/<model>.json --ctx <max_context_length>
-\`\`\`
+```
 
 To sweep all models at configured context lengths:
-\`\`\`bash
+```bash
 python scripts/run_grid.py
-\`\`\`
-Set the context lengths required in \`configs/global.json\`. Will run all models under \`configs/models/\` at the specified context lengths.
+```
+Set the context lengths required in `configs/global.json`. Will run all models under `configs/models/` at the specified context lengths.
 
 **Note:** For Qwen-7B, the rope scaling factor must be adjusted for the largest context being run.
 
 ### D. Evaluation
-Transformer results are stored under \`results/*.jsonl\`. For SSM baselines (8k/16k/32k) run the Colab-style pipeline:
-\`\`\`bash
+Transformer results are stored under `results/*.jsonl`. For SSM baselines (8k/16k/32k) run the Colab-style pipeline:
+```bash
 # Open and run all cells in:
 pure_ssm/notebooks/ssm_8k_16k_32k_final.ipynb
-\`\`\`
-Logs land in Google Drive \`pure_ssm_logs/\` and summaries in \`pure_ssm/results/\`.
+```
 
-If you want to log results automatically, enable wandb in the global config. Otherwise results and more details can be viewed through \`results/view.ipynb\`.
+Logs land in Google Drive `pure_ssm_logs/` and summaries in `pure_ssm/results/`.
+
+If you want to log results automatically, enable wandb in the global config. Otherwise results and more details can be viewed through `results/view.ipynb`.
 
 ### E. Quickstart: Minimum Reproducible Result
 To reproduce a transformer sweep (example):
-\`\`\`bash
+```bash
 # 1) Install dependencies
 pip install -r requirements.txt
 
@@ -103,65 +105,65 @@ python scripts/run_grid.py
 
 # 4) Inspect outputs
 ls results/
-\`\`\`
+```
 
 To reproduce a pure SSM 8k/16k/32k run (Colab):
-\`\`\`bash
+```bash
 # 1) Clone into Drive (in Colab)
 git clone https://github.com/andli28/SSM_experiment /content/drive/MyDrive/SSM_experiment
 
 # 2) Open and run all cells
 pure_ssm/notebooks/ssm_8k_16k_32k_final.ipynb
-\`\`\`
+```
 
 ---
 ## 5. Pure SSM Long-Context Track (Mamba)
 
-This repository also includes a **pure SSM (Mamba) long-context evaluation pipeline** under the \`test_notebooks/pure_ssm/\` directory. It evaluates Mamba models at 8k/16k/32k context on LongBench-v2, Ada-LEval, and PG-19, and reports both quality and efficiency.
+This repository also includes a **pure SSM (Mamba) long-context evaluation pipeline** under the `test_notebooks/pure_ssm/` directory. It evaluates Mamba models at 8k/16k/32k context on LongBench-v2, Ada-LEval, and PG-19, and reports both quality and efficiency.
 
 ### Models
 
 The SSM track uses:
-- \`state-spaces/mamba-2.8b-hf\` (≈2.8B parameters)
-- \`mistralai/Mamba-Codestral-7B-v0.1\` (≈7B parameters, Mamba-2)
+- `state-spaces/mamba-2.8b-hf` (≈2.8B parameters)
+- `mistralai/Mamba-Codestral-7B-v0.1` (≈7B parameters, Mamba-2)
 
-Both are run with **vLLM** and \`mamba-ssm\` using a shared decoding configuration (greedy decoding, temperature 0.0, \`max_new_tokens = 256\`).
+Both are run with **vLLM** and `mamba-ssm` using a shared decoding configuration (greedy decoding, temperature 0.0, `max_new_tokens = 256`).
 
 ### Main Notebook
 
 The end-to-end pipeline lives in:
-\`\`\`
+```
 pure_ssm/notebooks/ssm_8k_16k_32k_final.ipynb
-\`\`\`
+```
 
 Typical way to run it (on Google Colab):
 
 1. Mount Google Drive and clone this repo into:
-   \`\`\`
+   ```
    /content/drive/MyDrive/SSM_experiment
-   \`\`\`
+   ```
 
-2. Open \`pure_ssm/notebooks/ssm_8k_16k_32k_final.ipynb\` in Colab.
+2. Open `pure_ssm/notebooks/ssm_8k_16k_32k_final.ipynb` in Colab.
 
 3. Run all cells. The notebook will:
-   * Set up the environment (vLLM, \`mamba-ssm\`, etc.)
+   * Set up the environment (vLLM, `mamba-ssm`, etc.)
    * Build or load 8k/16k/32k prompt sets for LongBench-v2, Ada-LEval, and PG-19
    * Run pure-SSM baselines for Mamba-2.8B and Mamba-Codestral-7B at each context length
-   * Run LongBench multiple-choice evaluation via \`pure_ssm/eval_longbench_mc.py\`
+   * Run LongBench multiple-choice evaluation via `pure_ssm/eval_longbench_mc.py`
    * Aggregate metrics into CSV files
 
 ### Outputs
 
 * **Summary CSVs** are written under:
-  \`\`\`
+  ```
   pure_ssm/results/
-  \`\`\`
-  For example, \`pure_ssm/results/ssm_8k.csv\` contains quality + efficiency metrics for the 8k context runs.
+  ```
+  For example, `pure_ssm/results/ssm_8k.csv` contains quality + efficiency metrics for the 8k context runs.
 
-* **Per-run logs** (JSONL with prompts, completions, tokens/s, VRAM, etc.) are written to a \`pure_ssm_logs/\` directory in your Google Drive root:
-  \`\`\`
+* **Per-run logs** (JSONL with prompts, completions, tokens/s, VRAM, etc.) are written to a `pure_ssm_logs/` directory in your Google Drive root:
+  ```
   /content/drive/MyDrive/pure_ssm_logs/
-  \`\`\`
+  ```
 
 These outputs can be used to compare pure SSM models against the Jamba and other baselines in this repository.
 
@@ -169,14 +171,14 @@ These outputs can be used to compare pure SSM models against the Jamba and other
 ## 6. Configuration
 
 ### Global Config
-General config values are located in \`configs/global.json\`
+General config values are located in `configs/global.json`
 
 ### Model Configs
-Model specific configs are located in \`configs/models/<model>.json\`
+Model specific configs are located in `configs/models/<model>.json`
 
 ---
 ## 7. Notes
-- **Results Analysis**: \`results/view.ipynb\` generates detailed analysis of locally stored transformer runs, including raw metric values, prediction statistics, and accuracy plots across context lengths and models. For SSM baselines, summaries are available in \`pure_ssm/results/*.csv\`.
+- **Results Analysis**: `results/view.ipynb` generates detailed analysis of locally stored transformer runs, including raw metric values, prediction statistics, and accuracy plots across context lengths and models. For SSM baselines, summaries are available in `pure_ssm/results/*.csv`.
 - **Resources**:
   - https://longbench2.github.io/
   - https://pypi.org/project/mamba-ssm/
