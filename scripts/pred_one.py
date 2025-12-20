@@ -28,6 +28,26 @@ def build_llm(model_cfg: Dict[str, Any], g: Dict[str, Any], ctx: int) -> LLM:
     dtype = vllm_cfg.get("dtype", "bfloat16")
     tp = int(vllm_cfg.get("tensor_parallel_size", vllm_cfg.get("tp", 1)))
     gpu_mem = float(vllm_cfg.get("gpu_memory_utilization", 0.90))
+    
+    # Parse extra vLLM args from model config
+    extra_args_str = model_cfg.get("vllm_extra_args", "").strip()
+    extra_kwargs = {}
+    if extra_args_str:
+        import shlex
+        extra_args = shlex.split(extra_args_str)
+        i = 0
+        while i < len(extra_args):
+            arg = extra_args[i]
+            if arg.startswith("--"):
+                key = arg[2:].replace("-", "_")
+                if i + 1 < len(extra_args) and not extra_args[i + 1].startswith("--"):
+                    extra_kwargs[key] = extra_args[i + 1]
+                    i += 2
+                else:
+                    extra_kwargs[key] = True
+                    i += 1
+            else:
+                i += 1
 
     return LLM(
         model=hf_id,
@@ -36,6 +56,7 @@ def build_llm(model_cfg: Dict[str, Any], g: Dict[str, Any], ctx: int) -> LLM:
         tensor_parallel_size=tp,
         max_model_len=int(ctx),
         gpu_memory_utilization=gpu_mem,
+        **extra_kwargs,
     )
 
 
