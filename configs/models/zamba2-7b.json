@@ -6,5 +6,5 @@
     "params_b": 7.0,
     "engine": "v1",
     "tokenizer_id": "Zyphra/Zamba2-7B",
-    "vllm_extra_args": "--disable-flash-attn"
+    "vllm_extra_args": "--attention-backend TRITON_ATTN"
 }

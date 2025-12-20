@@ -22,8 +22,6 @@ def read_json(p: Path) -> Dict[str, Any]:
 
 
 def build_llm(model_cfg: Dict[str, Any], g: Dict[str, Any], ctx: int) -> LLM:
-    from vllm import EngineArgs
-    
     hf_id = model_cfg["hf_id"]
     vllm_cfg = g.get("vllm", {})
 
@@ -33,20 +31,39 @@ def build_llm(model_cfg: Dict[str, Any], g: Dict[str, Any], ctx: int) -> LLM:
     
     # Parse extra vLLM args from model config
     extra_args_str = model_cfg.get("vllm_extra_args", "").strip()
-    engine_args_list = [
-        hf_id,
-        "--dtype", dtype,
-        "--tensor-parallel-size", str(tp),
-        "--max-model-len", str(int(ctx)),
-        "--gpu-memory-utilization", str(gpu_mem),
-    ]
+    kwargs = {
+        "dtype": dtype,
+        "tensor_parallel_size": tp,
+        "max_model_len": int(ctx),
+        "gpu_memory_utilization": gpu_mem,
+        "trust_remote_code": True,
+    }
     
     if extra_args_str:
         import shlex
-        engine_args_list.extend(shlex.split(extra_args_str))
-    
-    engine_args = EngineArgs.from_cli_args(engine_args_list)
-    return LLM(model=hf_id, engine_args=engine_args)
+        extra_args = shlex.split(extra_args_str)
+        i = 0
+        while i < len(extra_args):
+            arg = extra_args[i]
+            if arg.startswith("--"):
+                key = arg[2:].replace("-", "_")
+                # Skip attention-backend; use environment variable instead
+                if key == "attention_backend":
+                    if i + 1 < len(extra_args) and not extra_args[i + 1].startswith("--"):
+                        os.environ["VLLM_ATTENTION_BACKEND"] = extra_args[i + 1]
+                        i += 2
+                    else:
+                        i += 1
+                elif i + 1 < len(extra_args) and not extra_args[i + 1].startswith("--"):
+                    kwargs[key] = extra_args[i + 1]
+                    i += 2
+                else:
+                    kwargs[key] = True
+                    i += 1
+            else:
+                i += 1
+
+    return LLM(model=hf_id, **kwargs)
 
 
 def main() -> None:
