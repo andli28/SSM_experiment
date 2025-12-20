@@ -46,7 +46,7 @@ def build_llm(model_cfg: Dict[str, Any], g: Dict[str, Any], ctx: int) -> LLM:
         engine_args_list.extend(shlex.split(extra_args_str))
     
     engine_args = EngineArgs.from_cli_args(engine_args_list)
-    return LLM(engine_args=engine_args)
+    return LLM(model=hf_id, engine_args=engine_args)
 
 
 def main() -> None:
