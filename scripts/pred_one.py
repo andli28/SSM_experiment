@@ -12,7 +12,7 @@ os.environ.setdefault("VLLM_ALLOW_LONG_MAX_MODEL_LEN", "1")
 ROOT = Path(__file__).resolve().parent.parent
 
 import pred_lb
-import pred_leval
+# import pred_leval
 
 from vllm import LLM  # type: ignore
 
@@ -22,6 +22,8 @@ def read_json(p: Path) -> Dict[str, Any]:
 
 
 def build_llm(model_cfg: Dict[str, Any], g: Dict[str, Any], ctx: int) -> LLM:
+    from vllm import EngineArgs
+    
     hf_id = model_cfg["hf_id"]
     vllm_cfg = g.get("vllm", {})
 
@@ -31,33 +33,20 @@ def build_llm(model_cfg: Dict[str, Any], g: Dict[str, Any], ctx: int) -> LLM:
     
     # Parse extra vLLM args from model config
     extra_args_str = model_cfg.get("vllm_extra_args", "").strip()
-    extra_kwargs = {}
+    engine_args_list = [
+        hf_id,
+        "--dtype", dtype,
+        "--tensor-parallel-size", str(tp),
+        "--max-model-len", str(int(ctx)),
+        "--gpu-memory-utilization", str(gpu_mem),
+    ]
+    
     if extra_args_str:
         import shlex
-        extra_args = shlex.split(extra_args_str)
-        i = 0
-        while i < len(extra_args):
-            arg = extra_args[i]
-            if arg.startswith("--"):
-                key = arg[2:].replace("-", "_")
-                if i + 1 < len(extra_args) and not extra_args[i + 1].startswith("--"):
-                    extra_kwargs[key] = extra_args[i + 1]
-                    i += 2
-                else:
-                    extra_kwargs[key] = True
-                    i += 1
-            else:
-                i += 1
-
-    return LLM(
-        model=hf_id,
-        trust_remote_code=True,
-        dtype=dtype,
-        tensor_parallel_size=tp,
-        max_model_len=int(ctx),
-        gpu_memory_utilization=gpu_mem,
-        **extra_kwargs,
-    )
+        engine_args_list.extend(shlex.split(extra_args_str))
+    
+    engine_args = EngineArgs.from_cli_args(engine_args_list)
+    return LLM(engine_args=engine_args)
 
 
 def main() -> None:
