@@ -28,7 +28,7 @@
         "top_p": 1.0
     },
     "longbench": {
-        "max_new_tokens": 1024,
+        "max_new_tokens": 128,
         "temperature": 0.1,
         "top_p": 1.0
     },
